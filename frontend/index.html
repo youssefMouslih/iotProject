@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title> Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="header">
+    <h1>Dashboard</h1>
+    <div class="header-actions">
+      <button id="open-settings-btn" class="icon-btn" aria-label="Edit settings">
+        <!-- Inline gear icon SVG -->
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 15.5C13.933 15.5 15.5 13.933 15.5 12C15.5 10.067 13.933 8.5 12 8.5C10.067 8.5 8.5 10.067 8.5 12C8.5 13.933 10.067 15.5 12 15.5Z" stroke="#e5e7eb" stroke-width="1.5"/>
+          <path d="M19 12.5C19 12.333 19 12.167 19 12C19 11.833 19 11.667 19 11.5L21 10L19.8 7.2L17.5 7.5L16.5 6L18 4.2L15.8 3L14 5L12 5C11.833 5 11.667 5 11.5 5C11.333 5 11.167 5 11 5L10 3L7.2 4.2L7.5 6.5L6 7.5L4.2 6L3 8.2L5 10C5 10.167 5 10.333 5 10.5C5 10.667 5 10.833 5 11L3 12L4.2 14.8L6.5 14.5L7.5 16L6 17.8L8.2 19L10 17L11 17C11.167 17 11.333 17 11.5 17C11.667 17 11.833 17 12 17L13 19L15.8 17.8L15.5 15.5L17 14.5L18.8 16L20 13.8L18 12.5H19Z" stroke="#e5e7eb" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="icon-label">Edit</span>
+      </button>
+    </div>
+    <div id="alert-banner" class="alert-banner hidden"></div>
+  </header>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="settings-title">Dashboard Settings</h2>
+        <button id="close-settings-btn" class="icon-btn small" aria-label="Close settings">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="controls">
+          <label>
+            Mode
+            <select id="mode-select">
+              <option value="live">Live</option>
+              <option value="aggregate">Aggregate</option>
+            </select>
+          </label>
+          <label>
+            Granularity
+            <select id="granularity-select">
+              <option value="hour">Hour</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+            </select>
+          </label>
+          <label>
+            Window
+            <input id="window-input" type="number" min="1" value="24" />
+          </label>
+          <label>
+            Threshold (°C)
+            <input id="threshold-input" type="number" step="0.1" />
+          </label>
+          <button id="save-threshold-btn">Save Threshold</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+    <section class="cards">
+      <div class="card">
+        <div class="label">Indoor Temperature</div>
+        <div id="indoor-temp" class="value">-- °C</div>
+      </div>
+      <div class="card">
+        <div class="label">Indoor Humidity</div>
+        <div id="indoor-humidity" class="value">-- %</div>
+      </div>
+      <div class="card">
+        <div class="label">Outdoor Temperature</div>
+        <div id="outdoor-temp" class="value">-- °C</div>
+      </div>
+      <div class="card">
+        <div class="label">Weather</div>
+        <div id="weather-cond" class="value">--</div>
+      </div>
+    </section>
+
+    <section class="chart-section">
+      <canvas id="tempChart" height="360"></canvas>
+    </section>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+.venv312/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables (secrets)
+.env
+.env.local
+.env.*.local
+
+# Database
+
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log
+yarn-error.log
+dist/
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+/logs
+.streamlit/
