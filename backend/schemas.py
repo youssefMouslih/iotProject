@@ -16,13 +16,28 @@ class SensorData(BaseModel):
 
 class ESP32Payload(BaseModel):
     """Request model for ESP32 sensor data with alert."""
-    device_id: str = Field(..., examples=["ESP32_01"])
-    temperature: float
+    device_id: Optional[str] = Field(default="ESP32_01", examples=["ESP32_01"])
+    temperature: Optional[float] = None  # Main temperature (if precomputed)
     humidity: Optional[float] = None
-    location: str = Field(default="Unknown")
+    location: Optional[str] = Field(default="Unknown")
     ldr_value: Optional[int] = None
-    ds18b20_temperature: Optional[float] = None
-    dht_temperature: Optional[float] = None
+    ds18b20_temp: Optional[float] = None  # DS18B20 temperature
+    dht_temp: Optional[float] = None  # DHT11 temperature
+    ds18b20_temperature: Optional[float] = None  # Alternative field name
+    dht_temperature: Optional[float] = None  # Alternative field name
+
+
+class ESP32SimplePayload(BaseModel):
+    """Request model for ESP32 with simple field names (from Arduino)."""
+    dht_temp: Optional[float] = None
+    humidity: Optional[float] = None
+    ds18b20_temp: Optional[float] = None
+    ldr_value: Optional[int] = None
+    max_threshold: Optional[float] = None
+    min_threshold: Optional[float] = None
+    alert_max: Optional[bool] = None
+    alert_min: Optional[bool] = None
+    alert: Optional[bool] = None
 
 
 class SettingsUpdate(BaseModel):
@@ -37,6 +52,12 @@ class SettingsUpdate(BaseModel):
     brevo_sender_name: Optional[str] = None
     whatsapp_enabled: Optional[bool] = None
     whatsapp_number: Optional[str] = None
+
+
+class ThresholdUpdate(BaseModel):
+    """Request model for updating temperature thresholds."""
+    max_threshold: Optional[float] = None
+    min_threshold: Optional[float] = None
 
 
 class EmailTestIn(BaseModel):

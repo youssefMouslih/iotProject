@@ -250,7 +250,18 @@ function LiveChart({ data, threshold, minThreshold }) {
 }
 
 function App() {
-  const [baseUrl, setBaseUrl] = useState(import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000')
+  // Get API URL - prioritize env variable, then compute from current location
+  const getDefaultApiUrl = () => {
+    const envUrl = import.meta.env.VITE_API_BASE_URL;
+    if (envUrl) return envUrl;
+    
+    // Fallback: use current host with port 8003
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}:8003`;
+  };
+  
+  const [baseUrl, setBaseUrl] = useState(getDefaultApiUrl())
   const [threshold, setThreshold] = useState(35)
   const [minThreshold, setMinThreshold] = useState(10)
   const [status, setStatus] = useState(null)
@@ -325,7 +336,13 @@ function App() {
           const message = JSON.parse(event.data)
           console.log('WebSocket message received:', message)
           
-          // Handle the message structure from backend
+          // Handle ping messages (keep-alive)
+          if (message.type === 'ping') {
+            console.log('Ping received from server')
+            return
+          }
+          
+          // Handle sensor update messages
           if (message.type === 'sensor_update' && message.data) {
             const newData = message.data
             
@@ -458,6 +475,14 @@ function App() {
     fetchStatus()
     fetchLatest()
     fetchHistory()
+    
+    // Poll for new data every 2 seconds as fallback/supplement to WebSocket
+    const pollInterval = setInterval(() => {
+      fetchLatest()
+      fetchHistory() // Also refresh history every 5 seconds for chart updates
+    }, 2000)
+    
+    return () => clearInterval(pollInterval)
   }, [])
 
   return (

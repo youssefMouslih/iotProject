@@ -1,15 +1,28 @@
 #!/bin/bash
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Kill any existing processes on ports
 echo "🧹 Cleaning up existing processes..."
-lsof -ti tcp:8003 | xargs kill -9 2>/dev/null
-lsof -ti tcp:5173 | xargs kill -9 2>/dev/null
+lsof -ti tcp:8003 | xargs kill -9 2>/dev/null || true
+lsof -ti tcp:5173 | xargs kill -9 2>/dev/null || true
 
 # Start Backend
 echo "🚀 Starting Backend on port 8003..."
-cd "/Users/useraccount/Downloads/iot copy 3"
-source .venv/bin/activate
-uvicorn backend.main:app --host 127.0.0.1 --port 8003 --reload &
+cd "$SCRIPT_DIR"
+
+# Activate virtual environment
+if [ -d ".venv312" ]; then
+    source .venv312/bin/activate
+elif [ -d ".venv" ]; then
+    source .venv/bin/activate
+else
+    echo "❌ No virtual environment found (.venv or .venv312)"
+    exit 1
+fi
+
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8003 &
 BACKEND_PID=$!
 echo "Backend started with PID: $BACKEND_PID"
 
@@ -19,7 +32,7 @@ sleep 3
 
 # Start Frontend
 echo "🎨 Starting Frontend on port 5173..."
-cd "/Users/useraccount/Downloads/iot copy 3/frontend/react-dashboard"
+cd "$SCRIPT_DIR/frontend/react-dashboard"
 
 # Create .env.local
 cat > .env.local << ENVEOF

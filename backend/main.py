@@ -32,7 +32,7 @@ from .database import (
     SensorRecordOut, SettingsOut, EmailAlertOut, get_db
 )
 from .schemas import (
-    SensorData, ESP32Payload, SettingsUpdate, EmailTestIn,
+    SensorData, ESP32Payload, ESP32SimplePayload, SettingsUpdate, ThresholdUpdate, EmailTestIn,
     AlertStatus, AlertReset, AlertList
 )
 from .alerts import (
@@ -217,7 +217,7 @@ async def post_data(payload: SensorData, db: Session = Depends(get_db)):
             "ldr_alert": None
         })
         
-        await event_broker.broadcast({"type": "sensor_data", "data": SensorRecordOut.from_orm(record).dict()})
+        await event_broker.broadcast({"type": "sensor_update", "data": SensorRecordOut.from_orm(record).dict()})
         
         return record
     except Exception as e:
@@ -226,21 +226,32 @@ async def post_data(payload: SensorData, db: Session = Depends(get_db)):
 
 
 @app.post("/sensor-data", response_model=SensorRecordOut)
-async def post_sensor_data(payload: ESP32Payload, db: Session = Depends(get_db)):
+async def post_sensor_data(payload: dict, db: Session = Depends(get_db)):
     """
     POST endpoint for ESP32 sensor data with alert detection.
     
+    Accepts both full ESP32Payload and simple sensor data from Arduino.
     Validates temperature readings and triggers alerts if thresholds are exceeded.
     """
     try:
+        # Extract temperature values (handle both formats)
+        ds18b20_temp = payload.get('ds18b20_temp') or payload.get('ds18b20_temperature')
+        dht_temp = payload.get('dht_temp') or payload.get('dht_temperature')
+        humidity = payload.get('humidity')
+        ldr_value = payload.get('ldr_value')
+        
+        # Extract device_id and location (with defaults if not provided by ESP32)
+        device_id = payload.get('device_id', 'ESP32_01')
+        location = payload.get('location', 'Unknown')
+        
         cfg = db.query(Settings).filter(Settings.id == 1).first()
         threshold = cfg.alert_threshold if cfg else ALERT_THRESHOLD
         min_threshold = cfg.min_alert_threshold if cfg else MIN_ALERT_THRESHOLD
         
         # Validate temperature readings
         temperature, temp_source, ds18b20_ok, dht_ok, sensor_disagree = validate_temperature_readings(
-            payload.ds18b20_temperature,
-            payload.dht_temperature
+            ds18b20_temp,
+            dht_temp
         )
         
         # Fetch weather
@@ -250,22 +261,22 @@ async def post_sensor_data(payload: ESP32Payload, db: Session = Depends(get_db))
         alert_value = 0
         alert_cause = None
         is_alert, alert_cause = check_and_trigger_alert(
-            temperature, payload.device_id, payload.location,
+            temperature, device_id, location,
             min_threshold, threshold, db, 0  # 0 for now, will be updated after DB insert
         )
         alert_value = 1 if is_alert else 0
         
         record = SensorRecord(
-            device_id=payload.device_id,
+            device_id=device_id,
             temperature=temperature,
-            humidity=payload.humidity,
+            humidity=humidity,
             outdoor_temperature=outdoor_temp,
             weather_condition=weather_condition,
             alert=alert_value,
             timestamp=datetime.utcnow(),
-            ldr_value=payload.ldr_value,
-            ds18b20_temperature=payload.ds18b20_temperature,
-            dht_temperature=payload.dht_temperature,
+            ldr_value=ldr_value,
+            ds18b20_temperature=ds18b20_temp,
+            dht_temperature=dht_temp,
             temperature_source=temp_source,
             ds18b20_ok=ds18b20_ok,
             dht_ok=dht_ok,
@@ -280,28 +291,29 @@ async def post_sensor_data(payload: ESP32Payload, db: Session = Depends(get_db))
         # Re-trigger alert now that we have the record ID
         if is_alert:
             check_and_trigger_alert(
-                temperature, payload.device_id, payload.location,
+                temperature, device_id, location,
                 min_threshold, threshold, db, record.id
             )
         
         # Append to CSV
         await append_record_to_csv({
             "timestamp": record.timestamp,
-            "device_id": record.device_id,
+            "device_id": device_id,
             "temperature": temperature,
-            "humidity": payload.humidity,
+            "humidity": humidity,
             "outdoor_temperature": outdoor_temp,
             "weather_condition": weather_condition,
             "alert": alert_value,
-            "ldr_value": payload.ldr_value,
+            "ldr_value": ldr_value,
             "ldr_alert": None
         })
         
         await event_broker.broadcast({
-            "type": "sensor_data",
+            "type": "sensor_update",
             "data": SensorRecordOut.from_orm(record).dict()
         })
         
+        logging.info(f"Sensor data recorded: device={device_id}, temp={temperature}°C, alert={alert_value}")
         return record
     except ValueError as e:
         logging.warning(f"Invalid sensor readings: {str(e)}")
@@ -370,7 +382,118 @@ async def update_settings(update: SettingsUpdate, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/config/thresholds")
+async def update_thresholds(
+    payload: ThresholdUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update alert thresholds via JSON body."""
+    try:
+        settings = db.query(Settings).filter(Settings.id == 1).first()
+        if not settings:
+            raise HTTPException(status_code=404, detail="Settings not found")
+        
+        if payload.max_threshold is not None:
+            settings.alert_threshold = float(payload.max_threshold)
+            logging.info(f"Max threshold updated to {payload.max_threshold}")
+        
+        if payload.min_threshold is not None:
+            settings.min_alert_threshold = float(payload.min_threshold)
+            logging.info(f"Min threshold updated to {payload.min_threshold}")
+        
+        db.commit()
+        db.refresh(settings)
+        
+        return {
+            "success": True,
+            "max_threshold": settings.alert_threshold,
+            "min_threshold": settings.min_alert_threshold
+        }
+    except Exception as e:
+        db.rollback()
+        logging.exception("Error updating thresholds")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/config/threshold")
+async def get_max_threshold(db: Session = Depends(get_db)):
+    """Get maximum temperature threshold (for ESP32 compatibility)."""
+    try:
+        settings = db.query(Settings).filter(Settings.id == 1).first()
+        if not settings:
+            raise HTTPException(status_code=404, detail="Settings not found")
+        
+        return {
+            "threshold": settings.alert_threshold
+        }
+    except Exception as e:
+        logging.exception("Error fetching max threshold")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/config/min-threshold")
+async def get_min_threshold(db: Session = Depends(get_db)):
+    """Get minimum temperature threshold (for ESP32 compatibility)."""
+    try:
+        settings = db.query(Settings).filter(Settings.id == 1).first()
+        if not settings:
+            raise HTTPException(status_code=404, detail="Settings not found")
+        
+        return {
+            "min_threshold": settings.min_alert_threshold
+        }
+    except Exception as e:
+        logging.exception("Error fetching min threshold")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== Data Query Endpoints ====================
+
+@app.get("/status")
+async def get_status(db: Session = Depends(get_db)):
+    """Get current system status including settings and latest data."""
+    try:
+        settings = db.query(Settings).filter(Settings.id == 1).first()
+        latest_record = db.query(SensorRecord).order_by(SensorRecord.id.desc()).first()
+        
+        return {
+            "status": "ok",
+            "threshold": settings.alert_threshold if settings else ALERT_THRESHOLD,
+            "min_threshold": settings.min_alert_threshold if settings else MIN_ALERT_THRESHOLD,
+            "latest_record": SensorRecordOut.from_orm(latest_record).dict() if latest_record else None
+        }
+    except Exception as e:
+        logging.exception("Error fetching status")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/data/latest")
+async def get_latest_data(db: Session = Depends(get_db)):
+    """Get the latest sensor record."""
+    try:
+        latest = db.query(SensorRecord).order_by(SensorRecord.id.desc()).first()
+        if not latest:
+            raise HTTPException(status_code=404, detail="No data available")
+        return SensorRecordOut.from_orm(latest)
+    except Exception as e:
+        logging.exception("Error fetching latest data")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/data/history")
+async def get_data_history(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    """Get historical sensor records."""
+    try:
+        records = db.query(SensorRecord).order_by(SensorRecord.timestamp.desc()).limit(limit).offset(offset).all()
+        return [SensorRecordOut.from_orm(r).dict() for r in records]
+    except Exception as e:
+        logging.exception("Error fetching history")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/sensor-records", response_model=List[SensorRecordOut])
 async def get_sensor_records(
@@ -417,19 +540,56 @@ async def send_email_alert(payload: Optional[EmailTestIn] = None, db: Session = 
 
 # ==================== WebSocket Endpoints ====================
 
+@app.websocket("/ws")
+async def websocket_endpoint_root(websocket: WebSocket):
+    """WebSocket endpoint for real-time event streaming (root path)."""
+    await event_broker.connect(websocket)
+    try:
+        # Keep connection open and receive broadcasts
+        while True:
+            try:
+                # Use longer timeout to reduce ping/disconnect cycles
+                await asyncio.wait_for(websocket.receive_text(), timeout=60)
+            except asyncio.TimeoutError:
+                # Send a ping to keep connection alive
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+            except Exception:
+                break
+    except WebSocketDisconnect:
+        event_broker.disconnect(websocket)
+    except Exception as e:
+        logging.exception("WebSocket error on /ws")
+        if websocket in event_broker.active_connections:
+            event_broker.disconnect(websocket)
+
+
 @app.websocket("/ws/events")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time event streaming."""
     await event_broker.connect(websocket)
     try:
+        # Keep connection open and receive broadcasts
         while True:
-            data = await websocket.receive_text()
-            await event_broker.broadcast({"type": "message", "data": data})
+            try:
+                # Use longer timeout to reduce ping/disconnect cycles
+                await asyncio.wait_for(websocket.receive_text(), timeout=60)
+            except asyncio.TimeoutError:
+                # Send a ping to keep connection alive
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    break
+            except Exception:
+                break
     except WebSocketDisconnect:
         event_broker.disconnect(websocket)
     except Exception as e:
-        logging.exception("WebSocket error")
-        event_broker.disconnect(websocket)
+        logging.exception("WebSocket error on /ws/events")
+        if websocket in event_broker.active_connections:
+            event_broker.disconnect(websocket)
 
 
 # ==================== Server-Sent Events ====================
