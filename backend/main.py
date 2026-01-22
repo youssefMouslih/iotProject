@@ -17,7 +17,7 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, RedirectResponse
 from sqlalchemy import func, text, inspect
 from sqlalchemy.orm import Session
 
@@ -63,6 +63,13 @@ app.add_middleware(
 
 # Mount static files
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+# Provide a friendly alias for Swagger UI
+@app.get("/swagger", include_in_schema=False)
+async def swagger_redirect():
+    """Redirect helper so Swagger UI is available at /swagger and /docs."""
+    return RedirectResponse(url="/docs")
 
 
 # ==================== EventBroker for WebSockets ====================
