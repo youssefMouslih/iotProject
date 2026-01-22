@@ -85,6 +85,8 @@ function Sidebar({
   setMinThreshold,
   showSettings,
   setShowSettings,
+  sidebarVisible,
+  setSidebarVisible,
   // connectionStatus,
 }) {
   const updateThreshold = async (newThreshold) => {
@@ -110,15 +112,19 @@ function Sidebar({
   }
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${sidebarVisible ? 'open' : 'closed'}`}>
       <div className="sidebar-header">
         <h2>Dashboard Monitor</h2>
-        <button 
+        <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+          <button 
           className="settings-toggle"
           onClick={() => setShowSettings(!showSettings)}
         >
           {showSettings ? '⚙️' : '⚙️'}
         </button>
+          {/* mobile close */}
+          <button className="mobile-close" onClick={() => setSidebarVisible(false)} aria-label="Close menu">✕</button>
+        </div>
       </div>
       
       {/* <div className="connection-status">
@@ -275,6 +281,7 @@ function App() {
   const [emailRecipients, setEmailRecipients] = useState(['admin@example.com'])
   const [newRecipient, setNewRecipient] = useState('')
   const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(true)
+  const [sidebarVisible, setSidebarVisible] = useState(true)
   
   const wsRef = useRef(null)
   const reconnectTimeoutRef = useRef(null)
@@ -487,6 +494,12 @@ function App() {
 
   return (
     <div className="app">
+      {/* Mobile header */}
+      <header className="mobile-header">
+        <button className="hamburger" onClick={() => setSidebarVisible(!sidebarVisible)} aria-label="Open menu">☰</button>
+        <div className="mobile-title">Dashboard Monitor</div>
+      </header>
+
       <Sidebar 
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
@@ -505,6 +518,8 @@ function App() {
         removeEmailRecipient={removeEmailRecipient}
         emailAlertsEnabled={emailAlertsEnabled}
         setEmailAlertsEnabled={setEmailAlertsEnabled}
+        sidebarVisible={sidebarVisible}
+        setSidebarVisible={setSidebarVisible}
       />
       
       <div className="main-content">
